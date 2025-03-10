@@ -30,7 +30,7 @@ Various aspects are currently hard-wired:
 * `android\src\main\java\com\capacitorjs\plugins\pushnotifications\MessagingService.java`
 * `android\src\main\java\com\capacitorjs\plugins\pushnotifications\PushNotificationsPlugin.java`
 * `android\src\main\java\com\capacitorjs\plugins\pushnotifications\NotificationChannelManager.java`
-* `CapacitorPushNotifications.podspec` RENAMED TO `FreegleCapacitorPushNotifications.podspec`
+* `CapacitorPushNotifications.podspec` RENAMED TO `FreegleCapacitorPushNotificationsCap7.podspec`
 
 Some changes are hard-wired for Freegle.
 
@@ -47,7 +47,7 @@ Some changes are hard-wired for Freegle.
 
 * Call `createForegroundNotificationChannel()` on start
 
-#### FreegleCapacitorPushNotifications.podspec
+#### FreegleCapacitorPushNotificationsCap7.podspec
 
 * iOS: File renamed and podspec name changed to reflect forked plugin name
 
