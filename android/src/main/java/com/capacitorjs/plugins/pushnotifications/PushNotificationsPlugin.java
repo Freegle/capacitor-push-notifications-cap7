@@ -1,10 +1,11 @@
-/* FREEGLE 7.0.1 */
+/* FREEGLE 7.0.2 */
 
 package com.capacitorjs.plugins.pushnotifications;
 
 import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationManager;
+import android.app.RemoteInput;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
@@ -47,12 +48,16 @@ public class PushNotificationsPlugin extends Plugin {
 
     public static Bridge staticBridge = null;
     public static RemoteMessage lastMessage = null;
+    public static JSObject pendingAction = null; // Freegle: Store action when app was not running
     public NotificationManager notificationManager;
     public MessagingService firebaseMessagingService;
     private NotificationChannelManager notificationChannelManager;
 
     private static final String EVENT_TOKEN_CHANGE = "registration";
     private static final String EVENT_TOKEN_ERROR = "registrationError";
+
+    // Freegle: Category constants for notification actions
+    public static final String CATEGORY_CHAT_MESSAGE = "CHAT_MESSAGE";
 
     public void load() {
         notificationManager = (NotificationManager) getActivity().getSystemService(Context.NOTIFICATION_SERVICE);
@@ -62,6 +67,12 @@ public class PushNotificationsPlugin extends Plugin {
         if (lastMessage != null) {
             fireNotification(lastMessage, false); // Freegle
             lastMessage = null;
+        }
+
+        // Freegle: Process any pending action from when app was not running
+        if (pendingAction != null) {
+            notifyListeners("pushNotificationActionPerformed", pendingAction, true);
+            pendingAction = null;
         }
 
         notificationChannelManager = new NotificationChannelManager(getActivity(), notificationManager, getConfig());
@@ -296,9 +307,16 @@ public class PushNotificationsPlugin extends Plugin {
               intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
               PendingIntent pendingIntent = PendingIntent.getActivity(getContext(), res, intent, PendingIntent.FLAG_IMMUTABLE);
 
+              // Get channel_id and category from payload, fall back to default channel
+              String channelId = msgdata.get("channel_id");
+              if (channelId == null || channelId.isEmpty()) {
+                  channelId = NotificationChannelManager.FOREGROUND_NOTIFICATION_CHANNEL_ID;
+              }
+              String category = msgdata.get("category");
+
               Notification.Builder builder = new Notification.Builder(
                   getContext(),
-                  NotificationChannelManager.FOREGROUND_NOTIFICATION_CHANNEL_ID
+                  channelId
               )
                   .setSmallIcon(pushIcon)
                   .setContentTitle(title)
@@ -308,7 +326,10 @@ public class PushNotificationsPlugin extends Plugin {
                   .setContentIntent(pendingIntent);
               setLargeIcon(builder,r,appIconResId);
 
-              notificationManager.notify(0, builder.build());
+              // Add action buttons based on category
+              addNotificationActions(getContext(), builder, category, msgdata, res);
+
+              notificationManager.notify(res, builder.build());
             }
           }
           catch(Exception e) {
@@ -415,6 +436,80 @@ public class PushNotificationsPlugin extends Plugin {
             d.draw(canvas);
             builder.setLargeIcon(bmp);
           }
+        }
+    }
+
+    /**
+     * Add action buttons to a notification based on the category.
+     * For CHAT_MESSAGE category, adds Reply (with text input) and Mark Read buttons.
+     */
+    public static void addNotificationActions(Context context, Notification.Builder builder,
+            String category, Map<String, String> msgdata, int notificationId) {
+        if (category == null || !CATEGORY_CHAT_MESSAGE.equals(category)) {
+            return; // Only add actions for chat messages
+        }
+
+        try {
+            // Create bundle with notification data for the actions
+            Bundle notificationDataBundle = new Bundle();
+            if (msgdata != null) {
+                for (Map.Entry<String, String> entry : msgdata.entrySet()) {
+                    notificationDataBundle.putString(entry.getKey(), entry.getValue());
+                }
+            }
+
+            // Reply action with RemoteInput for text
+            RemoteInput remoteInput = new RemoteInput.Builder(NotificationActionReceiver.KEY_TEXT_REPLY)
+                    .setLabel("Reply")
+                    .build();
+
+            Intent replyIntent = new Intent(context, NotificationActionReceiver.class);
+            replyIntent.setAction(NotificationActionReceiver.ACTION_REPLY);
+            replyIntent.putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_DATA, notificationDataBundle);
+            replyIntent.putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId);
+
+            PendingIntent replyPendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    notificationId * 10 + 1, // Unique request code
+                    replyIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
+            );
+
+            Notification.Action replyAction = new Notification.Action.Builder(
+                    android.R.drawable.ic_menu_send,
+                    "Reply",
+                    replyPendingIntent
+            )
+                    .addRemoteInput(remoteInput)
+                    .build();
+
+            builder.addAction(replyAction);
+
+            // Mark Read action
+            Intent markReadIntent = new Intent(context, NotificationActionReceiver.class);
+            markReadIntent.setAction(NotificationActionReceiver.ACTION_MARK_READ);
+            markReadIntent.putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_DATA, notificationDataBundle);
+            markReadIntent.putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId);
+
+            PendingIntent markReadPendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    notificationId * 10 + 2, // Unique request code
+                    markReadIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+
+            Notification.Action markReadAction = new Notification.Action.Builder(
+                    android.R.drawable.ic_menu_view,
+                    "Mark Read",
+                    markReadPendingIntent
+            )
+                    .build();
+
+            builder.addAction(markReadAction);
+
+            Log.d("PushNotifications", "Added Reply and Mark Read actions for category: " + category);
+        } catch (Exception e) {
+            Log.e("PushNotifications", "Error adding notification actions: " + e.getMessage());
         }
     }
     // ..Freegle

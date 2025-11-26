@@ -1,4 +1,4 @@
-/* FREEGLE 7.0.1 */
+/* FREEGLE 7.0.2 */
 
 package com.capacitorjs.plugins.pushnotifications;
 
@@ -76,8 +76,16 @@ public class MessagingService extends FirebaseMessagingService {
         if (bundle != null && bundle.getInt("com.google.firebase.messaging.default_notification_icon") != 0) {
             pushIcon = bundle.getInt("com.google.firebase.messaging.default_notification_icon");
         }
+
+        // Get channel_id and category from payload
+        String notifChannelId = msgdata.get("channel_id");
+        if (notifChannelId == null || notifChannelId.isEmpty()) {
+            notifChannelId = channelId; // Use default
+        }
+        String category = msgdata.get("category");
+
         Notification.Builder builder =
-                new Notification.Builder(this, channelId)
+                new Notification.Builder(this, notifChannelId)
                         .setContentTitle(title)
                         .setContentText(message)
                         .setSmallIcon(pushIcon)
@@ -86,6 +94,10 @@ public class MessagingService extends FirebaseMessagingService {
                         .setColor(Color.GREEN)
                         .setContentIntent(pendingIntent);
         PushNotificationsPlugin.setLargeIcon(builder,r,appIconResId);
+
+        // Add action buttons based on category
+        PushNotificationsPlugin.addNotificationActions(this, builder, category, msgdata, notId);
+
         notificationManager.notify(notId, builder.build());
       } catch (Exception e) {
         Log.e("PushNotifications", "sendServiceNotification exception "+e.getMessage());

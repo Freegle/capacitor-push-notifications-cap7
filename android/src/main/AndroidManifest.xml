@@ -5,5 +5,15 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- Freegle: Receiver for notification action buttons (Reply, Mark Read) -->
+        <receiver
+            android:name="com.capacitorjs.plugins.pushnotifications.NotificationActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.capacitorjs.plugins.pushnotifications.ACTION_REPLY" />
+                <action android:name="com.capacitorjs.plugins.pushnotifications.ACTION_MARK_READ" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
