@@ -243,6 +243,11 @@ public class PushNotificationsPlugin extends Plugin {
         notifyListeners(EVENT_TOKEN_ERROR, data, true);
     }
 
+    // Freegle: Public method to send action performed events from NotificationActionReceiver
+    public void sendActionPerformed(JSObject actionJson) {
+        notifyListeners("pushNotificationActionPerformed", actionJson, true);
+    }
+
     public static void onNewToken(String newToken) {
         PushNotificationsPlugin pushPlugin = PushNotificationsPlugin.getPushNotificationsInstance();
         if (pushPlugin != null) {

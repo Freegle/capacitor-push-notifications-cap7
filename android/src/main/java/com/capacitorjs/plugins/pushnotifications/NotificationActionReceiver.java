@@ -84,7 +84,7 @@ public class NotificationActionReceiver extends BroadcastReceiver {
         // Send to JavaScript layer
         PushNotificationsPlugin pushPlugin = PushNotificationsPlugin.getPushNotificationsInstance();
         if (pushPlugin != null) {
-            pushPlugin.notifyListeners("pushNotificationActionPerformed", actionJson, true);
+            pushPlugin.sendActionPerformed(actionJson);
         } else {
             Log.w("NotificationAction", "PushNotificationsPlugin not available, storing action for later");
             // Store the action to be processed when app starts
