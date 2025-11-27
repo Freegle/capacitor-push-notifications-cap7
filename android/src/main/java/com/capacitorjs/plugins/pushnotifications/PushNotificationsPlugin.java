@@ -291,8 +291,11 @@ public class PushNotificationsPlugin extends Plugin {
         }
         // ..Freegle
 
+        // FREEGLE: Skip Firebase's default notification handling
+        // We only use data-only notifications with channel_id
+        // Legacy notifications (with notification field, no channel_id) are ignored
         RemoteMessage.Notification notification = remoteMessage.getNotification();
-        if (notification != null) {
+        if (notification != null && msgdata != null && msgdata.get("channel_id") != null) {
             String title = notification.getTitle();
             String body = notification.getBody();
             String[] presentation = getConfig().getArray("presentationOptions");
