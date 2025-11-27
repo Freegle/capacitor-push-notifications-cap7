@@ -24,6 +24,24 @@ import java.util.Map;
  * Centralized notification creation for Freegle.
  * Used by both MessagingService (background) and PushNotificationsPlugin (foreground)
  * to ensure consistent notification display regardless of app state.
+ *
+ * FUTURE-PROOFING FOR NEW NOTIFICATION TYPES:
+ * This implementation is designed to handle future notification types gracefully:
+ *
+ * 1. Required fields (title, message, count, notId, channel_id) are validated with null checks.
+ *    If any are missing, the notification is rejected without crashing (lines 58-61).
+ *
+ * 2. Optional fields (category, image, timestamp) are checked before use.
+ *    Missing optional fields don't break notifications.
+ *
+ * 3. Unknown categories are handled gracefully - notifications display with basic UI
+ *    (no action buttons) but don't crash. Only recognized categories get action buttons.
+ *
+ * 4. When introducing new notification types in future:
+ *    - Use same core required fields (title, message, count, notId, channel_id)
+ *    - Add type-specific fields as OPTIONAL with null checks
+ *    - Update addNotificationActions() to recognize new category
+ *    - Older app versions will display new types as basic notifications without crashing
  */
 public class NotificationHelper {
 
