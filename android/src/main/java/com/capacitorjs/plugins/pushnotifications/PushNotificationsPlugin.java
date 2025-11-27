@@ -283,92 +283,11 @@ public class PushNotificationsPlugin extends Plugin {
         data.put("foreground", foreground); // Freegle
         remoteMessageData.put("data", data);
 
-        // Freegle..
-        // Handle data notification
+        // FREEGLE: Use centralized notification helper for consistent display
+        // This ensures same behavior whether app is foregrounded or backgrounded
         Map<String, String> msgdata = remoteMessage.getData();
         if (msgdata != null) {
-          try{
-            // FREEGLE: Only process notifications WITH channel_id (new app behavior)
-            // Legacy notifications (no channel_id) are ignored to prevent duplicates
-            String channelIdCheck = msgdata.get("channel_id");
-            if (channelIdCheck == null || channelIdCheck.isEmpty()) {
-              Log.d("PushNotifications", "Ignoring legacy notification without channel_id");
-              // Still send to JS layer for any custom handling
-              notifyListeners("pushNotificationReceived", remoteMessageData, true);
-              return true;
-            }
-
-            String title = msgdata.get("title").toString();
-            String message = msgdata.get("message").toString();
-            int count = Integer.parseInt(msgdata.get("count").toString());
-            int res = Integer.parseInt(msgdata.get("notId").toString());
-            if( count==0){
-              notificationManager.cancelAll();
-            } else {
-              Bundle bundle = null;
-              Resources r = null;
-              String className = getContext().getPackageName();
-              int appIconResId = 0;
-              try {
-                  ApplicationInfo applicationInfo = getContext()
-                      .getPackageManager()
-                      .getApplicationInfo(className, PackageManager.GET_META_DATA);
-                  bundle = applicationInfo.metaData;
-                  r = getContext().getPackageManager().getResourcesForApplication(className);
-                  appIconResId = applicationInfo.icon;
-              } catch (PackageManager.NameNotFoundException e) {
-              }
-              int pushIcon = android.R.drawable.ic_dialog_info;
-              if (bundle != null && bundle.getInt("com.google.firebase.messaging.default_notification_icon") != 0) {
-                  pushIcon = bundle.getInt("com.google.firebase.messaging.default_notification_icon");
-              }
-
-              Intent intent = new Intent(getContext(), Class.forName(className+".MainActivity"));
-              intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-              PendingIntent pendingIntent = PendingIntent.getActivity(getContext(), res, intent, PendingIntent.FLAG_IMMUTABLE);
-
-              // Get channel_id, category, image, and timestamp from payload
-              String channelId = msgdata.get("channel_id");
-              if (channelId == null || channelId.isEmpty()) {
-                  channelId = NotificationChannelManager.FOREGROUND_NOTIFICATION_CHANNEL_ID;
-              }
-              String category = msgdata.get("category");
-              String imageUrl = msgdata.get("image");
-              String timestampStr = msgdata.get("timestamp");
-
-              Notification.Builder builder = new Notification.Builder(
-                  getContext(),
-                  channelId
-              )
-                  .setSmallIcon(pushIcon)
-                  .setContentTitle(title)
-                  .setContentText(message)
-                  .setPriority(Notification.PRIORITY_DEFAULT)
-                  .setColor(Color.GREEN)
-                  .setContentIntent(pendingIntent);
-
-              // Set timestamp if available - OS will display it automatically
-              if (timestampStr != null && !timestampStr.isEmpty()) {
-                  try {
-                      long timestamp = Long.parseLong(timestampStr);
-                      builder.setWhen(timestamp * 1000);  // Convert to milliseconds
-                      builder.setShowWhen(true);
-                  } catch (NumberFormatException e) {
-                      Log.w("PushNotifications", "Invalid timestamp: " + timestampStr);
-                  }
-              }
-
-              setLargeIcon(builder,r,appIconResId,imageUrl);
-
-              // Add action buttons based on category
-              addNotificationActions(getContext(), builder, category, msgdata, res);
-
-              notificationManager.notify(res, builder.build());
-            }
-          }
-          catch(Exception e) {
-            Log.e("PushNotifications", "fireNotification exception "+e.getMessage());
-          }
+            NotificationHelper.createAndShowNotification(getContext(), msgdata);
         }
         // ..Freegle
 
@@ -460,90 +379,6 @@ public class PushNotificationsPlugin extends Plugin {
     }
 
     // Freegle..
-    /**
-     * Format timestamp as relative time ("3 minutes ago").
-     */
-    public static String formatRelativeTime(long timestamp) {
-        try {
-            long now = System.currentTimeMillis() / 1000;  // Current time in seconds
-            long diff = now - timestamp;  // Difference in seconds
-
-            if (diff < 60) {
-                return "just now";
-            } else if (diff < 3600) {
-                long minutes = diff / 60;
-                return minutes + (minutes == 1 ? " minute ago" : " minutes ago");
-            } else if (diff < 86400) {
-                long hours = diff / 3600;
-                return hours + (hours == 1 ? " hour ago" : " hours ago");
-            } else if (diff < 604800) {
-                long days = diff / 86400;
-                return days + (days == 1 ? " day ago" : " days ago");
-            } else {
-                long weeks = diff / 604800;
-                return weeks + (weeks == 1 ? " week ago" : " weeks ago");
-            }
-        } catch (Exception e) {
-            Log.e("PushNotifications", "Error formatting timestamp: " + e.getMessage());
-            return "";
-        }
-    }
-
-    /**
-     * Download a bitmap from a URL synchronously.
-     * This should be called from a background thread.
-     */
-    private static Bitmap downloadImage(String imageUrl) {
-        try {
-            URL url = new URL(imageUrl);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setDoInput(true);
-            connection.setConnectTimeout(5000);
-            connection.setReadTimeout(5000);
-            connection.connect();
-            InputStream input = connection.getInputStream();
-            Bitmap bitmap = BitmapFactory.decodeStream(input);
-            input.close();
-            connection.disconnect();
-            return bitmap;
-        } catch (Exception e) {
-            Log.e("PushNotifications", "Error downloading image: " + e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * Set large icon for notification, trying image URL first, then falling back to app icon.
-     */
-    public static void setLargeIcon(Notification.Builder builder, Resources r, int appIconResId, String imageUrl) {
-        Bitmap iconBitmap = null;
-
-        // Try to download image from URL if provided
-        if (imageUrl != null && !imageUrl.isEmpty() && imageUrl.startsWith("http")) {
-            try {
-                iconBitmap = downloadImage(imageUrl);
-                if (iconBitmap != null) {
-                    builder.setLargeIcon(iconBitmap);
-                    return; // Success, no need to try app icon
-                }
-            } catch (Exception e) {
-                Log.w("PushNotifications", "Failed to load image from URL, falling back to app icon: " + e.getMessage());
-            }
-        }
-
-        // Fall back to app icon
-        if (r != null && appIconResId != 0){
-          Drawable d = ResourcesCompat.getDrawable(r, appIconResId, null);
-          if( d != null) {
-            final Bitmap bmp = Bitmap.createBitmap(d.getIntrinsicWidth(), d.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
-            final Canvas canvas = new Canvas(bmp);
-            d.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
-            d.draw(canvas);
-            builder.setLargeIcon(bmp);
-          }
-        }
-    }
-
     /**
      * Add action buttons to a notification based on the category.
      * For CHAT_MESSAGE category, adds Reply (with text input) and Mark Read buttons.
