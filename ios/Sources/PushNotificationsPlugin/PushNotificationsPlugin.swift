@@ -27,7 +27,8 @@ public class PushNotificationsPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "removeDeliveredNotifications", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "createChannel", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "listChannels", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "deleteChannel", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "deleteChannel", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "registerActionCategories", returnType: CAPPluginReturnPromise)
     ]
     private let notificationDelegateHandler = PushNotificationsHandler()
     private var appDelegateRegistrationCalled: Bool = false
@@ -206,6 +207,54 @@ public class PushNotificationsPlugin: CAPPlugin, CAPBridgedPlugin {
         }
         notifyListeners("registrationError", data: [
             "error": error.localizedDescription
+        ])
+    }
+
+    /**
+     * Register notification action categories for iOS.
+     * This enables action buttons (Reply, Mark Read) on notifications.
+     * Categories must match what the server sends in the payload's "category" field.
+     */
+    @objc func registerActionCategories(_ call: CAPPluginCall) {
+        // Reply action with text input
+        let replyAction = UNTextInputNotificationAction(
+            identifier: "reply",
+            title: "Reply",
+            options: [.authenticationRequired],
+            textInputButtonTitle: "Send",
+            textInputPlaceholder: "Type your reply..."
+        )
+
+        // Mark Read action
+        let markReadAction = UNNotificationAction(
+            identifier: "mark_read",
+            title: "Mark Read",
+            options: []
+        )
+
+        // View action - opens app to the chat
+        let viewAction = UNNotificationAction(
+            identifier: "view",
+            title: "View",
+            options: [.foreground]
+        )
+
+        // CHAT_MESSAGE category - matches Android's CATEGORY_CHAT_MESSAGE
+        // Server sends category: "CHAT_MESSAGE" for chat notifications
+        let chatMessageCategory = UNNotificationCategory(
+            identifier: "CHAT_MESSAGE",
+            actions: [replyAction, markReadAction, viewAction],
+            intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: "New message",
+            options: [.customDismissAction]
+        )
+
+        // Register all categories
+        UNUserNotificationCenter.current().setNotificationCategories([chatMessageCategory])
+
+        call.resolve([
+            "registered": true,
+            "categories": ["CHAT_MESSAGE"]
         ])
     }
 }

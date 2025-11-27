@@ -144,6 +144,29 @@ export interface PushNotificationsPlugin {
      * @since 1.0.0
      */
     removeAllListeners(): Promise<void>;
+    /**
+     * Register notification action categories for iOS.
+     * This enables action buttons (Reply, Mark Read, View) on notifications.
+     *
+     * Only available on iOS.
+     *
+     * @since 7.0.2
+     */
+    registerActionCategories(): Promise<RegisterActionCategoriesResult>;
+}
+export interface RegisterActionCategoriesResult {
+    /**
+     * Whether the categories were registered successfully.
+     *
+     * @since 7.0.2
+     */
+    registered: boolean;
+    /**
+     * List of category identifiers that were registered.
+     *
+     * @since 7.0.2
+     */
+    categories: string[];
 }
 export interface PushNotificationSchema {
     /**
