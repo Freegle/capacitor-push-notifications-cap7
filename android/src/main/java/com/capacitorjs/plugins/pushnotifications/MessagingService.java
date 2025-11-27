@@ -21,12 +21,8 @@ public class MessagingService extends FirebaseMessagingService {
     public void onMessageReceived(@NonNull RemoteMessage remoteMessage) {
         super.onMessageReceived(remoteMessage);
 
-        // FREEGLE: Always create notification via centralized helper
-        // This ensures consistent display regardless of app state
-        Map<String, String> msgdata = remoteMessage.getData();
-        NotificationHelper.createAndShowNotification(this, msgdata);
-
-        // Also notify plugin for JS layer handling (badge, routing, etc.)
+        // FREEGLE: Notify plugin which handles both notification display and JS layer
+        // The plugin uses NotificationHelper for consistent notification creation
         PushNotificationsPlugin.sendRemoteMessage(remoteMessage);
     }
 
