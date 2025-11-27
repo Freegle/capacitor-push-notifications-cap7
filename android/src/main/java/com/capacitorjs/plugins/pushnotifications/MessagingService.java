@@ -46,12 +46,22 @@ public class MessagingService extends FirebaseMessagingService {
       Map<String, String> msgdata = remoteMessage.getData();
       if (msgdata == null) return;
 
-      String title = msgdata.get("title").toString();
-      String message = msgdata.get("message").toString();
-      int count = Integer.parseInt(msgdata.get("count").toString());
-      int notId = Integer.parseInt(msgdata.get("notId").toString());
-
       try{
+        // Extract fields with null checking
+        String titleStr = msgdata.get("title");
+        String messageStr = msgdata.get("message");
+        String countStr = msgdata.get("count");
+        String notIdStr = msgdata.get("notId");
+
+        if (titleStr == null || messageStr == null || countStr == null || notIdStr == null) {
+          Log.e("PushNotifications", "Missing required fields in notification payload");
+          return;
+        }
+
+        String title = titleStr;
+        String message = messageStr;
+        int count = Integer.parseInt(countStr);
+        int notId = Integer.parseInt(notIdStr);
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if( count==0){
           notificationManager.cancelAll();
