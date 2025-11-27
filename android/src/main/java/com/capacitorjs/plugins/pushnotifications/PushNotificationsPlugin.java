@@ -288,6 +288,16 @@ public class PushNotificationsPlugin extends Plugin {
         Map<String, String> msgdata = remoteMessage.getData();
         if (msgdata != null) {
           try{
+            // FREEGLE: Only process notifications WITH channel_id (new app behavior)
+            // Legacy notifications (no channel_id) are ignored to prevent duplicates
+            String channelIdCheck = msgdata.get("channel_id");
+            if (channelIdCheck == null || channelIdCheck.isEmpty()) {
+              Log.d("PushNotifications", "Ignoring legacy notification without channel_id");
+              // Still send to JS layer for any custom handling
+              notifyListeners("pushNotificationReceived", remoteMessageData, true);
+              return true;
+            }
+
             String title = msgdata.get("title").toString();
             String message = msgdata.get("message").toString();
             int count = Integer.parseInt(msgdata.get("count").toString());

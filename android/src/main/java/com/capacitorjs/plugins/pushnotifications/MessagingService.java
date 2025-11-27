@@ -46,6 +46,14 @@ public class MessagingService extends FirebaseMessagingService {
       Map<String, String> msgdata = remoteMessage.getData();
       if (msgdata == null) return;
 
+      // FREEGLE: Only process notifications WITH channel_id (new app behavior)
+      // Legacy notifications (no channel_id) are ignored to prevent duplicates
+      String channelIdCheck = msgdata.get("channel_id");
+      if (channelIdCheck == null || channelIdCheck.isEmpty()) {
+        Log.d("PushNotifications", "Ignoring legacy notification without channel_id");
+        return;
+      }
+
       try{
         // Extract fields with null checking
         String titleStr = msgdata.get("title");
