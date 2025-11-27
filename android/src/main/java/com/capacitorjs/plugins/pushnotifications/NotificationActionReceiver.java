@@ -20,6 +20,7 @@ public class NotificationActionReceiver extends BroadcastReceiver {
 
     public static final String ACTION_REPLY = "com.capacitorjs.plugins.pushnotifications.ACTION_REPLY";
     public static final String ACTION_MARK_READ = "com.capacitorjs.plugins.pushnotifications.ACTION_MARK_READ";
+    public static final String ACTION_VIEW = "com.capacitorjs.plugins.pushnotifications.ACTION_VIEW";
     public static final String KEY_TEXT_REPLY = "key_text_reply";
     public static final String EXTRA_NOTIFICATION_DATA = "notification_data";
     public static final String EXTRA_NOTIFICATION_ID = "notification_id";
@@ -74,6 +75,9 @@ public class NotificationActionReceiver extends BroadcastReceiver {
         } else if (ACTION_MARK_READ.equals(action)) {
             actionJson.put("actionId", "mark_read");
             Log.d("NotificationAction", "Mark read action");
+        } else if (ACTION_VIEW.equals(action)) {
+            actionJson.put("actionId", "view");
+            Log.d("NotificationAction", "View action");
         } else {
             // Unknown action
             return;

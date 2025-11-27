@@ -337,17 +337,12 @@ public class PushNotificationsPlugin extends Plugin {
                   .setColor(Color.GREEN)
                   .setContentIntent(pendingIntent);
 
-              // Set timestamp if available
+              // Set timestamp if available - OS will display it automatically
               if (timestampStr != null && !timestampStr.isEmpty()) {
                   try {
                       long timestamp = Long.parseLong(timestampStr);
                       builder.setWhen(timestamp * 1000);  // Convert to milliseconds
                       builder.setShowWhen(true);
-                      // Add relative time as subtext
-                      String relativeTime = formatRelativeTime(timestamp);
-                      if (!relativeTime.isEmpty()) {
-                          builder.setSubText(relativeTime);
-                      }
                   } catch (NumberFormatException e) {
                       Log.w("PushNotifications", "Invalid timestamp: " + timestampStr);
                   }
@@ -607,7 +602,29 @@ public class PushNotificationsPlugin extends Plugin {
 
             builder.addAction(markReadAction);
 
-            Log.d("PushNotifications", "Added Reply and Mark Read actions for category: " + category);
+            // View action - opens the app to the chat
+            Intent viewIntent = new Intent(context, NotificationActionReceiver.class);
+            viewIntent.setAction(NotificationActionReceiver.ACTION_VIEW);
+            viewIntent.putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_DATA, notificationDataBundle);
+            viewIntent.putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, notificationId);
+
+            PendingIntent viewPendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    notificationId * 10 + 3, // Unique request code
+                    viewIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+
+            Notification.Action viewAction = new Notification.Action.Builder(
+                    android.R.drawable.ic_menu_info_details,
+                    "View",
+                    viewPendingIntent
+            )
+                    .build();
+
+            builder.addAction(viewAction);
+
+            Log.d("PushNotifications", "Added Reply, Mark Read, and View actions for category: " + category);
         } catch (Exception e) {
             Log.e("PushNotifications", "Error adding notification actions: " + e.getMessage());
         }

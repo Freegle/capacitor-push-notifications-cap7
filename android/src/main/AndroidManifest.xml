@@ -6,13 +6,14 @@
             </intent-filter>
         </service>
 
-        <!-- Freegle: Receiver for notification action buttons (Reply, Mark Read) -->
+        <!-- Freegle: Receiver for notification action buttons (Reply, Mark Read, View) -->
         <receiver
             android:name="com.capacitorjs.plugins.pushnotifications.NotificationActionReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.capacitorjs.plugins.pushnotifications.ACTION_REPLY" />
                 <action android:name="com.capacitorjs.plugins.pushnotifications.ACTION_MARK_READ" />
+                <action android:name="com.capacitorjs.plugins.pushnotifications.ACTION_VIEW" />
             </intent-filter>
         </receiver>
     </application>

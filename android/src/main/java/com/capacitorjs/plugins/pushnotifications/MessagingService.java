@@ -96,17 +96,12 @@ public class MessagingService extends FirebaseMessagingService {
                         .setColor(Color.GREEN)
                         .setContentIntent(pendingIntent);
 
-        // Set timestamp if available
+        // Set timestamp if available - OS will display it automatically
         if (timestampStr != null && !timestampStr.isEmpty()) {
             try {
                 long timestamp = Long.parseLong(timestampStr);
                 builder.setWhen(timestamp * 1000);  // Convert to milliseconds
                 builder.setShowWhen(true);
-                // Add relative time as subtext
-                String relativeTime = PushNotificationsPlugin.formatRelativeTime(timestamp);
-                if (!relativeTime.isEmpty()) {
-                    builder.setSubText(relativeTime);
-                }
             } catch (NumberFormatException e) {
                 Log.w("PushNotifications", "Invalid timestamp: " + timestampStr);
             }
