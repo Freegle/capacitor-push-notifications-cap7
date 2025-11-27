@@ -31,12 +31,17 @@ import org.json.JSONObject;
 import android.app.PendingIntent;  // Freegle..
 import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.util.Log;
 import androidx.core.content.res.ResourcesCompat;
-import java.util.Map; // ..Freegle
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.Map;
+import java.util.concurrent.TimeUnit; // ..Freegle
 
 @CapacitorPlugin(
     name = "PushNotifications",
@@ -312,12 +317,14 @@ public class PushNotificationsPlugin extends Plugin {
               intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
               PendingIntent pendingIntent = PendingIntent.getActivity(getContext(), res, intent, PendingIntent.FLAG_IMMUTABLE);
 
-              // Get channel_id and category from payload, fall back to default channel
+              // Get channel_id, category, image, and timestamp from payload
               String channelId = msgdata.get("channel_id");
               if (channelId == null || channelId.isEmpty()) {
                   channelId = NotificationChannelManager.FOREGROUND_NOTIFICATION_CHANNEL_ID;
               }
               String category = msgdata.get("category");
+              String imageUrl = msgdata.get("image");
+              String timestampStr = msgdata.get("timestamp");
 
               Notification.Builder builder = new Notification.Builder(
                   getContext(),
@@ -329,7 +336,24 @@ public class PushNotificationsPlugin extends Plugin {
                   .setPriority(Notification.PRIORITY_DEFAULT)
                   .setColor(Color.GREEN)
                   .setContentIntent(pendingIntent);
-              setLargeIcon(builder,r,appIconResId);
+
+              // Set timestamp if available
+              if (timestampStr != null && !timestampStr.isEmpty()) {
+                  try {
+                      long timestamp = Long.parseLong(timestampStr);
+                      builder.setWhen(timestamp * 1000);  // Convert to milliseconds
+                      builder.setShowWhen(true);
+                      // Add relative time as subtext
+                      String relativeTime = formatRelativeTime(timestamp);
+                      if (!relativeTime.isEmpty()) {
+                          builder.setSubText(relativeTime);
+                      }
+                  } catch (NumberFormatException e) {
+                      Log.w("PushNotifications", "Invalid timestamp: " + timestampStr);
+                  }
+              }
+
+              setLargeIcon(builder,r,appIconResId,imageUrl);
 
               // Add action buttons based on category
               addNotificationActions(getContext(), builder, category, msgdata, res);
@@ -431,7 +455,78 @@ public class PushNotificationsPlugin extends Plugin {
     }
 
     // Freegle..
-    public static void setLargeIcon(Notification.Builder builder, Resources r, int appIconResId) {
+    /**
+     * Format timestamp as relative time ("3 minutes ago").
+     */
+    public static String formatRelativeTime(long timestamp) {
+        try {
+            long now = System.currentTimeMillis() / 1000;  // Current time in seconds
+            long diff = now - timestamp;  // Difference in seconds
+
+            if (diff < 60) {
+                return "just now";
+            } else if (diff < 3600) {
+                long minutes = diff / 60;
+                return minutes + (minutes == 1 ? " minute ago" : " minutes ago");
+            } else if (diff < 86400) {
+                long hours = diff / 3600;
+                return hours + (hours == 1 ? " hour ago" : " hours ago");
+            } else if (diff < 604800) {
+                long days = diff / 86400;
+                return days + (days == 1 ? " day ago" : " days ago");
+            } else {
+                long weeks = diff / 604800;
+                return weeks + (weeks == 1 ? " week ago" : " weeks ago");
+            }
+        } catch (Exception e) {
+            Log.e("PushNotifications", "Error formatting timestamp: " + e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * Download a bitmap from a URL synchronously.
+     * This should be called from a background thread.
+     */
+    private static Bitmap downloadImage(String imageUrl) {
+        try {
+            URL url = new URL(imageUrl);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setDoInput(true);
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
+            connection.connect();
+            InputStream input = connection.getInputStream();
+            Bitmap bitmap = BitmapFactory.decodeStream(input);
+            input.close();
+            connection.disconnect();
+            return bitmap;
+        } catch (Exception e) {
+            Log.e("PushNotifications", "Error downloading image: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Set large icon for notification, trying image URL first, then falling back to app icon.
+     */
+    public static void setLargeIcon(Notification.Builder builder, Resources r, int appIconResId, String imageUrl) {
+        Bitmap iconBitmap = null;
+
+        // Try to download image from URL if provided
+        if (imageUrl != null && !imageUrl.isEmpty() && imageUrl.startsWith("http")) {
+            try {
+                iconBitmap = downloadImage(imageUrl);
+                if (iconBitmap != null) {
+                    builder.setLargeIcon(iconBitmap);
+                    return; // Success, no need to try app icon
+                }
+            } catch (Exception e) {
+                Log.w("PushNotifications", "Failed to load image from URL, falling back to app icon: " + e.getMessage());
+            }
+        }
+
+        // Fall back to app icon
         if (r != null && appIconResId != 0){
           Drawable d = ResourcesCompat.getDrawable(r, appIconResId, null);
           if( d != null) {

@@ -77,12 +77,14 @@ public class MessagingService extends FirebaseMessagingService {
             pushIcon = bundle.getInt("com.google.firebase.messaging.default_notification_icon");
         }
 
-        // Get channel_id and category from payload
+        // Get channel_id, category, image, and timestamp from payload
         String notifChannelId = msgdata.get("channel_id");
         if (notifChannelId == null || notifChannelId.isEmpty()) {
             notifChannelId = channelId; // Use default
         }
         String category = msgdata.get("category");
+        String imageUrl = msgdata.get("image");
+        String timestampStr = msgdata.get("timestamp");
 
         Notification.Builder builder =
                 new Notification.Builder(this, notifChannelId)
@@ -93,7 +95,24 @@ public class MessagingService extends FirebaseMessagingService {
                         .setAutoCancel(true)
                         .setColor(Color.GREEN)
                         .setContentIntent(pendingIntent);
-        PushNotificationsPlugin.setLargeIcon(builder,r,appIconResId);
+
+        // Set timestamp if available
+        if (timestampStr != null && !timestampStr.isEmpty()) {
+            try {
+                long timestamp = Long.parseLong(timestampStr);
+                builder.setWhen(timestamp * 1000);  // Convert to milliseconds
+                builder.setShowWhen(true);
+                // Add relative time as subtext
+                String relativeTime = PushNotificationsPlugin.formatRelativeTime(timestamp);
+                if (!relativeTime.isEmpty()) {
+                    builder.setSubText(relativeTime);
+                }
+            } catch (NumberFormatException e) {
+                Log.w("PushNotifications", "Invalid timestamp: " + timestampStr);
+            }
+        }
+
+        PushNotificationsPlugin.setLargeIcon(builder,r,appIconResId,imageUrl);
 
         // Add action buttons based on category
         PushNotificationsPlugin.addNotificationActions(this, builder, category, msgdata, notId);
