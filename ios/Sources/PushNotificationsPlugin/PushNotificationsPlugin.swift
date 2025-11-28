@@ -46,6 +46,47 @@ public class PushNotificationsPlugin: CAPPlugin, CAPBridgedPlugin {
                                                selector: #selector(self.didFailToRegisterForRemoteNotificationsWithError(notification:)),
                                                name: .capacitorDidFailToRegisterForRemoteNotifications,
                                                object: nil)
+
+        // Register notification categories at plugin load time (early as possible)
+        // This ensures categories are ready before any notifications arrive
+        registerNotificationCategoriesInternal()
+    }
+
+    private func registerNotificationCategoriesInternal() {
+        // Reply action with text input
+        let replyAction = UNTextInputNotificationAction(
+            identifier: "reply",
+            title: "Reply",
+            options: [.authenticationRequired],
+            textInputButtonTitle: "Send",
+            textInputPlaceholder: "Type your reply..."
+        )
+
+        // Mark Read action
+        let markReadAction = UNNotificationAction(
+            identifier: "mark_read",
+            title: "Mark Read",
+            options: []
+        )
+
+        // View action - opens app to the chat
+        let viewAction = UNNotificationAction(
+            identifier: "view",
+            title: "View",
+            options: [.foreground]
+        )
+
+        // CHAT_MESSAGE category - matches Android's CATEGORY_CHAT_MESSAGE
+        let chatMessageCategory = UNNotificationCategory(
+            identifier: "CHAT_MESSAGE",
+            actions: [replyAction, markReadAction, viewAction],
+            intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: "New message",
+            options: [.customDismissAction]
+        )
+
+        print("FREEGLE: Registering notification categories at plugin load: [CHAT_MESSAGE]")
+        UNUserNotificationCenter.current().setNotificationCategories([chatMessageCategory])
     }
 
     deinit {
