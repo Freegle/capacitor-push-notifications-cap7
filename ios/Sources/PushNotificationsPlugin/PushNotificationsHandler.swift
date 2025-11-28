@@ -38,7 +38,13 @@ public class PushNotificationsHandler: NSObject, NotificationHandlerProtocol {
             optionsArray.forEach { option in
                 switch option {
                 case "alert":
-                    presentationOptions.insert(.alert)
+                    // iOS 14+ uses .banner and .list instead of .alert
+                    if #available(iOS 14.0, *) {
+                        presentationOptions.insert(.banner)
+                        presentationOptions.insert(.list)
+                    } else {
+                        presentationOptions.insert(.alert)
+                    }
                 case "badge":
                     presentationOptions.insert(.badge)
 
@@ -53,8 +59,13 @@ public class PushNotificationsHandler: NSObject, NotificationHandlerProtocol {
             return presentationOptions
         }
 
-        print("FREEGLE: No presentationOptions config found, returning empty (notification will NOT show)")
-        return []
+        // Default: show notification with banner, list, badge, and sound if no config
+        print("FREEGLE: No presentationOptions config found, using default (banner, list, badge, sound)")
+        if #available(iOS 14.0, *) {
+            return [.banner, .list, .badge, .sound]
+        } else {
+            return [.alert, .badge, .sound]
+        }
     }
 
     public func didReceive(response: UNNotificationResponse) {
