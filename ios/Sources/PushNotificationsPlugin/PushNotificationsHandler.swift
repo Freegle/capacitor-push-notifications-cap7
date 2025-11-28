@@ -18,6 +18,7 @@ public class PushNotificationsHandler: NSObject, NotificationHandlerProtocol {
     }
 
     public func willPresent(notification: UNNotification) -> UNNotificationPresentationOptions {
+        print("FREEGLE: willPresent called for notification: \(notification.request.identifier)")
         let notificationData = makeNotificationRequestJSObject(notification.request)
         self.plugin?.notifyListeners("pushNotificationReceived", data: notificationData)
 
@@ -25,11 +26,13 @@ public class PushNotificationsHandler: NSObject, NotificationHandlerProtocol {
             let silent = options["silent"] as? Bool ?? false
 
             if silent {
+                print("FREEGLE: Notification is silent, returning empty options")
                 return UNNotificationPresentationOptions.init(rawValue: 0)
             }
         }
 
         if let optionsArray = self.plugin?.getConfig().getArray("presentationOptions") as? [String] {
+            print("FREEGLE: Found presentationOptions: \(optionsArray)")
             var presentationOptions = UNNotificationPresentationOptions.init()
 
             optionsArray.forEach { option in
@@ -46,9 +49,11 @@ public class PushNotificationsHandler: NSObject, NotificationHandlerProtocol {
                 }
             }
 
+            print("FREEGLE: Returning presentationOptions: \(presentationOptions)")
             return presentationOptions
         }
 
+        print("FREEGLE: No presentationOptions config found, returning empty (notification will NOT show)")
         return []
     }
 
