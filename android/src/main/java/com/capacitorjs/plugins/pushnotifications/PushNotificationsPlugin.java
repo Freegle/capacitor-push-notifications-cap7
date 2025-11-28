@@ -236,6 +236,32 @@ public class PushNotificationsPlugin extends Plugin {
         notificationChannelManager.listChannels(call);
     }
 
+    @PluginMethod
+    public void getBackgroundPushLog(PluginCall call) {
+        // Read debug log from SharedPreferences (written by MessagingService when app not running)
+        try {
+            android.content.SharedPreferences prefs = getContext().getSharedPreferences("push_debug", android.content.Context.MODE_PRIVATE);
+            String log = prefs.getString("log", "");
+            JSObject result = new JSObject();
+            result.put("log", log);
+            call.resolve(result);
+        } catch (Exception e) {
+            call.reject("Failed to read push debug log: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void clearBackgroundPushLog(PluginCall call) {
+        // Clear the debug log
+        try {
+            android.content.SharedPreferences prefs = getContext().getSharedPreferences("push_debug", android.content.Context.MODE_PRIVATE);
+            prefs.edit().putString("log", "").apply();
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed to clear push debug log: " + e.getMessage());
+        }
+    }
+
     public void sendToken(String token) {
         JSObject data = new JSObject();
         data.put("value", token);

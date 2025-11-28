@@ -153,6 +153,31 @@ export interface PushNotificationsPlugin {
      * @since 7.0.2
      */
     registerActionCategories(): Promise<RegisterActionCategoriesResult>;
+    /**
+     * Get background push notification debug log.
+     * Returns log entries from MessagingService when app was not running.
+     *
+     * Only available on Android.
+     *
+     * @since 7.0.3
+     */
+    getBackgroundPushLog(): Promise<BackgroundPushLogResult>;
+    /**
+     * Clear the background push notification debug log.
+     *
+     * Only available on Android.
+     *
+     * @since 7.0.3
+     */
+    clearBackgroundPushLog(): Promise<void>;
+}
+export interface BackgroundPushLogResult {
+    /**
+     * The debug log entries.
+     *
+     * @since 7.0.3
+     */
+    log: string;
 }
 export interface RegisterActionCategoriesResult {
     /**
