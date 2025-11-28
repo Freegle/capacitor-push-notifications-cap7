@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Freegle: Allow app to receive notifications after device restart -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
     <application>
         <service android:name="com.capacitorjs.plugins.pushnotifications.MessagingService" android:exported="false">
             <intent-filter>
@@ -14,6 +17,16 @@
                 <action android:name="com.capacitorjs.plugins.pushnotifications.ACTION_REPLY" />
                 <action android:name="com.capacitorjs.plugins.pushnotifications.ACTION_MARK_READ" />
                 <action android:name="com.capacitorjs.plugins.pushnotifications.ACTION_VIEW" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Freegle: Receiver to initialize FCM after device restart -->
+        <receiver
+            android:name="com.capacitorjs.plugins.pushnotifications.BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
             </intent-filter>
         </receiver>
     </application>
