@@ -250,7 +250,9 @@ public class PushNotificationsPlugin: CAPPlugin, CAPBridgedPlugin {
         )
 
         // Register all categories
+        print("FREEGLE: Registering notification categories: [CHAT_MESSAGE]")
         UNUserNotificationCenter.current().setNotificationCategories([chatMessageCategory])
+        print("FREEGLE: Notification categories registered successfully")
 
         call.resolve([
             "registered": true,

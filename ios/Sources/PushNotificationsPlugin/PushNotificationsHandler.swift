@@ -93,13 +93,16 @@ public class PushNotificationsHandler: NSObject, NotificationHandlerProtocol {
     }
 
     func makeNotificationRequestJSObject(_ request: UNNotificationRequest) -> JSObject {
+        let categoryId = request.content.categoryIdentifier
+        print("FREEGLE: Notification category identifier: '\(categoryId)'")
         return [
             "id": request.identifier,
             "title": request.content.title,
             "subtitle": request.content.subtitle,
             "badge": request.content.badge ?? 1,
             "body": request.content.body,
-            "data": JSTypes.coerceDictionaryToJSObject(request.content.userInfo) ?? [:]
+            "data": JSTypes.coerceDictionaryToJSObject(request.content.userInfo) ?? [:],
+            "categoryId": categoryId
         ]
     }
 }
