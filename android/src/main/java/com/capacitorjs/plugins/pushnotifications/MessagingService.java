@@ -3,6 +3,7 @@
 package com.capacitorjs.plugins.pushnotifications;
 
 import android.content.SharedPreferences;
+import android.util.Log;
 import androidx.annotation.NonNull;
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
