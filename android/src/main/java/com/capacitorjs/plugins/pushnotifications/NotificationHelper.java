@@ -48,7 +48,6 @@ import java.util.Map;
 public class NotificationHelper {
 
     private static final String TAG = "NotificationHelper";
-    private static final String PACKAGE_NAME = "org.ilovefreegle.direct";
 
     /**
      * Create and display a notification from FCM data payload.
@@ -105,13 +104,14 @@ public class NotificationHelper {
             int appIconResId = 0;
             
             try {
+                String packageName = context.getPackageName();
                 ApplicationInfo applicationInfo = context.getPackageManager()
-                    .getApplicationInfo(PACKAGE_NAME, PackageManager.GET_META_DATA);
+                    .getApplicationInfo(packageName, PackageManager.GET_META_DATA);
                 bundle = applicationInfo.metaData;
-                resources = context.getPackageManager().getResourcesForApplication(PACKAGE_NAME);
+                resources = context.getPackageManager().getResourcesForApplication(packageName);
                 appIconResId = applicationInfo.icon;
             } catch (PackageManager.NameNotFoundException e) {
-                Log.w(TAG, "Package not found: " + PACKAGE_NAME);
+                Log.w(TAG, "Package not found: " + context.getPackageName());
             }
 
             // Get notification icon
@@ -123,7 +123,7 @@ public class NotificationHelper {
             // Create intent to open app
             Intent intent;
             try {
-                intent = new Intent(context, Class.forName(PACKAGE_NAME + ".MainActivity"));
+                intent = new Intent(context, Class.forName(context.getPackageName() + ".MainActivity"));
             } catch (ClassNotFoundException e) {
                 Log.e(TAG, "MainActivity class not found", e);
                 return false;
