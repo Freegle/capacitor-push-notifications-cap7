@@ -13,13 +13,18 @@ import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Rect;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -252,6 +257,29 @@ public class NotificationHelper {
             }
 
             if (count >= 2) {
+                // Prefer a photo collage of the top posts (photo-first design). Falls back to
+                // the InboxStyle text list when fewer than two posts have a usable photo.
+                Bitmap collage = buildCollage(msgdata.get("images"));
+                if (collage != null) {
+                    Notification.BigPictureStyle pictureStyle = new Notification.BigPictureStyle()
+                        .bigPicture(collage)
+                        .bigLargeIcon((Bitmap) null);
+                    if (title != null && !title.isEmpty()) {
+                        pictureStyle.setBigContentTitle(title);
+                    }
+                    // Item names go in the expanded summary line beneath the collage.
+                    String namesSummary = msgdata.get("message");
+                    if (namesSummary == null || namesSummary.isEmpty()) {
+                        namesSummary = summary;
+                    }
+                    if (namesSummary != null && !namesSummary.isEmpty()) {
+                        pictureStyle.setSummaryText(namesSummary);
+                    }
+                    builder.setStyle(pictureStyle);
+                    Log.d(TAG, "NEW_POSTS: applied BigPictureStyle collage (count=" + count + ")");
+                    return;
+                }
+
                 // InboxStyle: each "lines" entry on its own row
                 Notification.InboxStyle inboxStyle = new Notification.InboxStyle();
 
@@ -311,6 +339,97 @@ public class NotificationHelper {
             // Never crash — base single-line notification is already built
             Log.e(TAG, "NEW_POSTS: unexpected error applying rich style, falling back: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Build a photo collage from the "images" payload field (JSON array of up to ~4 URLs)
+     * for the multi-post NEW_POSTS notification, so the expanded view shows several item
+     * photos rather than a text-only list.
+     *
+     * Returns a single tiled bitmap (mosaic laid out in a 2:1 frame), or null when fewer
+     * than two photos are available — in which case the caller falls back to InboxStyle text.
+     * Up to 4 photos are used; extras are ignored (the "+N more" count already conveys the rest).
+     */
+    private static Bitmap buildCollage(String imagesJson) {
+        if (imagesJson == null || imagesJson.isEmpty()) {
+            return null;
+        }
+
+        List<Bitmap> bitmaps = new ArrayList<>();
+        try {
+            JSONArray urls = new JSONArray(imagesJson);
+            for (int i = 0; i < urls.length() && bitmaps.size() < 4; i++) {
+                String url = urls.optString(i, null);
+                if (url != null && url.startsWith("http")) {
+                    Bitmap b = downloadImage(url);
+                    if (b != null) {
+                        bitmaps.add(b);
+                    }
+                }
+            }
+        } catch (JSONException e) {
+            Log.w(TAG, "NEW_POSTS: failed to parse images JSON: " + e.getMessage());
+            return null;
+        }
+
+        int n = bitmaps.size();
+        if (n < 2) {
+            return null; // not enough photos for a collage — caller falls back to text list
+        }
+
+        final int W = 1024, H = 512, gap = 6;
+        Bitmap out = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(out);
+        canvas.drawColor(Color.WHITE);
+        Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
+
+        if (n == 2) {
+            int half = (W - gap) / 2;
+            drawCropped(canvas, bitmaps.get(0), new Rect(0, 0, half, H), paint);
+            drawCropped(canvas, bitmaps.get(1), new Rect(half + gap, 0, W, H), paint);
+        } else if (n == 3) {
+            int half = (W - gap) / 2;
+            int rowH = (H - gap) / 2;
+            drawCropped(canvas, bitmaps.get(0), new Rect(0, 0, half, H), paint);
+            drawCropped(canvas, bitmaps.get(1), new Rect(half + gap, 0, W, rowH), paint);
+            drawCropped(canvas, bitmaps.get(2), new Rect(half + gap, rowH + gap, W, H), paint);
+        } else { // 4
+            int colW = (W - gap) / 2;
+            int rowH = (H - gap) / 2;
+            drawCropped(canvas, bitmaps.get(0), new Rect(0, 0, colW, rowH), paint);
+            drawCropped(canvas, bitmaps.get(1), new Rect(colW + gap, 0, W, rowH), paint);
+            drawCropped(canvas, bitmaps.get(2), new Rect(0, rowH + gap, colW, H), paint);
+            drawCropped(canvas, bitmaps.get(3), new Rect(colW + gap, rowH + gap, W, H), paint);
+        }
+
+        return out;
+    }
+
+    /**
+     * Draw a bitmap into dst, centre-cropped to dst's aspect ratio (fills the cell, no distortion).
+     */
+    private static void drawCropped(Canvas canvas, Bitmap src, Rect dst, Paint paint) {
+        int bw = src.getWidth(), bh = src.getHeight();
+        if (bw <= 0 || bh <= 0) {
+            return;
+        }
+        float dstAspect = (float) dst.width() / dst.height();
+        float srcAspect = (float) bw / bh;
+
+        int sw, sh;
+        if (srcAspect > dstAspect) {
+            // source is relatively wider → crop its sides
+            sh = bh;
+            sw = Math.round(bh * dstAspect);
+        } else {
+            // source is relatively taller → crop top/bottom
+            sw = bw;
+            sh = Math.round(bw / dstAspect);
+        }
+        int sx = (bw - sw) / 2;
+        int sy = (bh - sh) / 2;
+        Rect srcRect = new Rect(sx, sy, sx + sw, sy + sh);
+        canvas.drawBitmap(src, srcRect, dst, paint);
     }
 
     /**

@@ -1,4 +1,5 @@
 import UserNotifications
+import UIKit
 
 /// Freegle Notification Service Extension
 ///
@@ -24,6 +25,7 @@ import UserNotifications
 ///   lines       - JSON array of ≤5 item strings, e.g. ["Offer: Sofa (Kingston)","Wanted: Bike"]
 ///   moreCount   - additional items beyond lines, e.g. "2"
 ///   image       - https:// URL of the first post photo; "" when absent
+///   images      - JSON array of up to 4 post photo URLs; tiled into a collage when >=2
 ///
 public class NotificationService: UNNotificationServiceExtension {
 
@@ -99,6 +101,14 @@ public class NotificationService: UNNotificationServiceExtension {
         content.categoryIdentifier = "NEW_POSTS"
 
         // --- Image attachment ---
+        // Prefer a collage of the top posts' photos ("images" JSON array); when fewer than
+        // two photos are available, fall back to the single "image" thumbnail.
+        let collageURLs = parseImageURLs(userInfo["images"])
+        if collageURLs.count >= 2 {
+            downloadAndAttachCollage(urls: Array(collageURLs.prefix(4)), to: content, completion: completion)
+            return
+        }
+
         let imageURLString = userInfo["image"] as? String ?? ""
         if imageURLString.hasPrefix("http://") || imageURLString.hasPrefix("https://"),
            let imageURL = URL(string: imageURLString) {
@@ -172,6 +182,113 @@ public class NotificationService: UNNotificationServiceExtension {
             }
         }
         task.resume()
+    }
+
+    // MARK: - Multi-photo collage
+
+    /// Parse the "images" FCM field (JSON array of http(s) URL strings) into URLs.
+    private func parseImageURLs(_ raw: Any?) -> [URL] {
+        guard let s = raw as? String,
+              let data = s.data(using: .utf8),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [String] else {
+            return []
+        }
+        return arr.compactMap { str -> URL? in
+            guard str.hasPrefix("http://") || str.hasPrefix("https://") else { return nil }
+            return URL(string: str)
+        }
+    }
+
+    /// Download up to 4 photos, tile them into one collage image, and attach it.
+    /// Needs at least two successful downloads; otherwise delivers the (already enriched)
+    /// text content with no attachment.
+    private func downloadAndAttachCollage(
+        urls: [URL],
+        to content: UNMutableNotificationContent,
+        completion: @escaping () -> Void
+    ) {
+        let group = DispatchGroup()
+        var images = [Int: UIImage]()
+        let lock = NSLock()
+
+        for (idx, url) in urls.enumerated() {
+            group.enter()
+            URLSession.shared.dataTask(with: url) { data, _, _ in
+                defer { group.leave() }
+                if let data = data, let img = UIImage(data: data) {
+                    lock.lock(); images[idx] = img; lock.unlock()
+                }
+            }.resume()
+        }
+
+        group.notify(queue: .main) {
+            let ordered = urls.indices.compactMap { images[$0] }
+            guard ordered.count >= 2 else { completion(); return }
+
+            let collage = self.composeCollage(ordered, size: CGSize(width: 1024, height: 512))
+            guard let jpeg = collage.jpegData(compressionQuality: 0.85) else { completion(); return }
+
+            let tmp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("new_posts_collage_\(UUID().uuidString).jpg")
+            do {
+                try jpeg.write(to: tmp)
+                let attachment = try UNNotificationAttachment(identifier: "new_posts_collage", url: tmp, options: nil)
+                content.attachments = [attachment]
+            } catch {
+                print("FREEGLE NSE: collage attach error: \(error)")
+            }
+            completion()
+        }
+    }
+
+    /// Tile 2–4 images into a 2:1 mosaic (mirrors the Android collage layout):
+    /// 2 → side by side, 3 → one large + two stacked, 4 → 2×2. Each cell is aspect-fill cropped.
+    private func composeCollage(_ images: [UIImage], size: CGSize) -> UIImage {
+        let gap: CGFloat = 6
+        let W = size.width, H = size.height
+        let half = (W - gap) / 2
+        let rowH = (H - gap) / 2
+        let n = min(images.count, 4)
+
+        var rects: [CGRect] = []
+        switch n {
+        case 2:
+            rects = [CGRect(x: 0, y: 0, width: half, height: H),
+                     CGRect(x: half + gap, y: 0, width: W - half - gap, height: H)]
+        case 3:
+            rects = [CGRect(x: 0, y: 0, width: half, height: H),
+                     CGRect(x: half + gap, y: 0, width: W - half - gap, height: rowH),
+                     CGRect(x: half + gap, y: rowH + gap, width: W - half - gap, height: H - rowH - gap)]
+        default:
+            rects = [CGRect(x: 0, y: 0, width: half, height: rowH),
+                     CGRect(x: half + gap, y: 0, width: W - half - gap, height: rowH),
+                     CGRect(x: 0, y: rowH + gap, width: half, height: H - rowH - gap),
+                     CGRect(x: half + gap, y: rowH + gap, width: W - half - gap, height: H - rowH - gap)]
+        }
+
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { rendererContext in
+            let ctx = rendererContext.cgContext
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+            for (i, rect) in rects.enumerated() {
+                self.drawAspectFill(images[i], in: rect, context: ctx)
+            }
+        }
+    }
+
+    /// Draw an image filling `rect` (centre-cropped, no distortion), clipped to the cell.
+    private func drawAspectFill(_ image: UIImage, in rect: CGRect, context: CGContext) {
+        let iw = image.size.width, ih = image.size.height
+        guard iw > 0, ih > 0 else { return }
+        context.saveGState()
+        context.addRect(rect)
+        context.clip()
+        let scale = max(rect.width / iw, rect.height / ih)
+        let dw = iw * scale, dh = ih * scale
+        let drawRect = CGRect(x: rect.midX - dw / 2, y: rect.midY - dh / 2, width: dw, height: dh)
+        image.draw(in: drawRect)
+        context.restoreGState()
     }
 
     /// Returns a lowercase file extension (without dot) suitable for UNNotificationAttachment.
