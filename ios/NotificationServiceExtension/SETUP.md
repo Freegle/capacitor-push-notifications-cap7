@@ -7,8 +7,23 @@ Xcode target.
 
 A Notification Service Extension (NSE) is an **app target**, not a library.
 It cannot be distributed inside a CocoaPods pod or a Swift Package — it must be
-added directly to the host app's `.xcodeproj`.  These steps must be done once in
-Xcode on a Mac.
+added to the host app's `.xcodeproj`.
+
+**This is now automated on CircleCI** — no manual Xcode step. The app repo
+(`iznik-nuxt3`) wires and signs the NSE entirely in CI:
+
+- `fastlane/add_nse_target.rb` copies this NSE source out of the installed plugin
+  package and adds/refreshes the `NotificationServiceExtension` target in
+  `App.xcodeproj` (idempotent; runs every build, survives `npx cap sync ios`).
+- The `ios beta` lane then `produce`s the App ID and `get_provisioning_profile`s an
+  App Store profile for `org.ilovefreegle.iphone.NotificationServiceExtension` using
+  the existing App Store Connect API key, signs the NSE target, and adds both targets
+  to `gym`'s `provisioningProfiles` export map.
+
+The only prerequisite is the App Store Connect API key (already configured for the
+app). It self-gates: until the plugin version bundling this NSE is installed in the
+app, the step no-ops and the app builds without the extension (iOS notifications then
+fall back to plain text). The manual steps below remain as reference / fallback.
 
 ---
 
