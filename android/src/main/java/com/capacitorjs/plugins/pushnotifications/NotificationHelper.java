@@ -21,6 +21,8 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Map;
+import org.json.JSONArray;
+import org.json.JSONException;
 
 /**
  * Centralized notification creation for Freegle.
@@ -163,8 +165,14 @@ public class NotificationHelper {
                 }
             }
 
-            // Set large icon (profile image)
+            // Set large icon (profile image / first post photo)
             setLargeIcon(builder, resources, appIconResId, imageUrl);
+
+            // FREEGLE: Apply rich style for NEW_POSTS category (InboxStyle or BigPictureStyle)
+            // Falls back to base single-line notification if fields are missing or parsing fails.
+            if (PushNotificationsPlugin.CATEGORY_NEW_POSTS.equals(category)) {
+                applyNewPostsStyle(builder, msgdata, count, imageUrl);
+            }
 
             // Add action buttons based on category
             PushNotificationsPlugin.addNotificationActions(context, builder, category, msgdata, notId);
@@ -212,9 +220,104 @@ public class NotificationHelper {
     }
 
     /**
-     * Download image from URL for notification icon.
+     * Apply rich Android notification style for NEW_POSTS category.
+     *
+     * count >= 2 -> InboxStyle: one line per entry in "lines", optional "+N more" line,
+     *               summary text from "summary", big content title from payload "title".
+     *               First post photo (already set as largeIcon) is reused — no second download.
+     * count == 1 -> BigPictureStyle: "image" URL downloaded as bigPicture bitmap,
+     *               bigLargeIcon(null) so the large icon collapses when expanded.
+     *
+     * All field reads are null/empty-safe; any parse failure logs a warning and
+     * leaves the builder untouched so the collapsed single-line view still works.
+     *
+     * FUTURE-PROOFING: If new fields are added to NEW_POSTS payloads in future,
+     * add them here as optional with null checks following the same defensive pattern.
      */
-    private static Bitmap downloadImage(String imageUrl) {
+    static void applyNewPostsStyle(Notification.Builder builder, Map<String, String> msgdata,
+                                   int count, String imageUrl) {
+        try {
+            String title   = msgdata.get("title");
+            String summary = msgdata.get("summary");
+            String linesJson = msgdata.get("lines");
+
+            int moreCount = 0;
+            String moreCountStr = msgdata.get("moreCount");
+            if (moreCountStr != null && !moreCountStr.isEmpty()) {
+                try {
+                    moreCount = Integer.parseInt(moreCountStr);
+                } catch (NumberFormatException e) {
+                    Log.w(TAG, "NEW_POSTS: invalid moreCount value: " + moreCountStr);
+                }
+            }
+
+            if (count >= 2) {
+                // InboxStyle: each "lines" entry on its own row
+                Notification.InboxStyle inboxStyle = new Notification.InboxStyle();
+
+                if (title != null && !title.isEmpty()) {
+                    inboxStyle.setBigContentTitle(title);
+                }
+                if (summary != null && !summary.isEmpty()) {
+                    inboxStyle.setSummaryText(summary);
+                }
+
+                if (linesJson != null && !linesJson.isEmpty()) {
+                    try {
+                        JSONArray linesArray = new JSONArray(linesJson);
+                        for (int i = 0; i < linesArray.length(); i++) {
+                            String line = linesArray.optString(i, null);
+                            if (line != null && !line.isEmpty()) {
+                                inboxStyle.addLine(line);
+                            }
+                        }
+                    } catch (JSONException e) {
+                        Log.w(TAG, "NEW_POSTS: failed to parse lines JSON: " + e.getMessage());
+                        // Fall through — style still applied with title/summary only
+                    }
+                }
+
+                // "+N more" trailing line when there are posts beyond the listed ones
+                if (moreCount > 0) {
+                    inboxStyle.addLine("+" + moreCount + " more");
+                }
+
+                builder.setStyle(inboxStyle);
+                Log.d(TAG, "NEW_POSTS: applied InboxStyle (count=" + count + ", moreCount=" + moreCount + ")");
+
+            } else if (count == 1) {
+                // BigPictureStyle: show the single item's photo expanded
+                if (imageUrl != null && !imageUrl.isEmpty() && imageUrl.startsWith("http")) {
+                    Bitmap bigPicture = downloadImage(imageUrl);
+                    if (bigPicture != null) {
+                        Notification.BigPictureStyle bigPictureStyle = new Notification.BigPictureStyle()
+                            .bigPicture(bigPicture)
+                            .bigLargeIcon((Bitmap) null); // collapse largeIcon when expanded
+
+                        if (title != null && !title.isEmpty()) {
+                            bigPictureStyle.setBigContentTitle(title);
+                        }
+
+                        builder.setStyle(bigPictureStyle);
+                        Log.d(TAG, "NEW_POSTS: applied BigPictureStyle (count=1)");
+                    } else {
+                        Log.w(TAG, "NEW_POSTS: BigPicture download returned null, keeping single-line style");
+                    }
+                } else {
+                    Log.d(TAG, "NEW_POSTS: count=1 but no image URL, keeping single-line style");
+                }
+            }
+        } catch (Exception e) {
+            // Never crash — base single-line notification is already built
+            Log.e(TAG, "NEW_POSTS: unexpected error applying rich style, falling back: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Download image from URL for notification icon.
+     * Package-private so it can be reused by helpers in this package (e.g. applyNewPostsStyle).
+     */
+    static Bitmap downloadImage(String imageUrl) {
         try {
             URL url = new URL(imageUrl);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();

@@ -85,8 +85,21 @@ public class PushNotificationsPlugin: CAPPlugin, CAPBridgedPlugin {
             options: [.customDismissAction]
         )
 
-        print("FREEGLE: Registering notification categories at plugin load: [CHAT_MESSAGE]")
-        UNUserNotificationCenter.current().setNotificationCategories([chatMessageCategory])
+        // NEW_POSTS category - daily digest push (passive, no action buttons).
+        // The Notification Service Extension intercepts these to attach an image
+        // and build the multiline body from FCM data fields.
+        // interruption-level "passive" is set by the server in the APNs envelope;
+        // registering the category here lets iOS apply the correct presentation rules.
+        let newPostsCategory = UNNotificationCategory(
+            identifier: "NEW_POSTS",
+            actions: [],
+            intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: "New posts near you",
+            options: []
+        )
+
+        print("FREEGLE: Registering notification categories at plugin load: [CHAT_MESSAGE, NEW_POSTS]")
+        UNUserNotificationCenter.current().setNotificationCategories([chatMessageCategory, newPostsCategory])
     }
 
     deinit {
@@ -290,14 +303,25 @@ public class PushNotificationsPlugin: CAPPlugin, CAPBridgedPlugin {
             options: [.customDismissAction]
         )
 
+        // NEW_POSTS category - passive daily digest push, no action buttons.
+        // Registering it here keeps the category list in sync with the early
+        // registration done at plugin load in registerNotificationCategoriesInternal().
+        let newPostsCategory = UNNotificationCategory(
+            identifier: "NEW_POSTS",
+            actions: [],
+            intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: "New posts near you",
+            options: []
+        )
+
         // Register all categories
-        print("FREEGLE: Registering notification categories: [CHAT_MESSAGE]")
-        UNUserNotificationCenter.current().setNotificationCategories([chatMessageCategory])
+        print("FREEGLE: Registering notification categories: [CHAT_MESSAGE, NEW_POSTS]")
+        UNUserNotificationCenter.current().setNotificationCategories([chatMessageCategory, newPostsCategory])
         print("FREEGLE: Notification categories registered successfully")
 
         call.resolve([
             "registered": true,
-            "categories": ["CHAT_MESSAGE"]
+            "categories": ["CHAT_MESSAGE", "NEW_POSTS"]
         ])
     }
 }
