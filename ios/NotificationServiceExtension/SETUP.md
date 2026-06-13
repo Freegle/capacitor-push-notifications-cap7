@@ -57,7 +57,7 @@ Open `iznik-nuxt3/ios/App/App.xcworkspace` in Xcode (the workspace, not the
 - Choose **Notification Service Extension**
 - Product Name: `NotificationServiceExtension`
 - Team: `GMYU3K9D84`  (matches the rest of the app)
-- Bundle Identifier: `io.freegle.app.NotificationServiceExtension`
+- Bundle Identifier: `org.ilovefreegle.iphone.NotificationServiceExtension`
   (must be a sub-identifier of the main app bundle ID)
 - Language: **Swift**
 - Click **Finish** — Xcode will ask "Activate scheme?"; choose **Cancel** so
@@ -82,7 +82,7 @@ Select the `NotificationServiceExtension` target → **Build Settings**:
 - `MARKETING_VERSION` — must match the main app (set it to `$(inherited)` if
   you use a shared xcconfig)
 - `CURRENT_PROJECT_VERSION` — same
-- `PRODUCT_BUNDLE_IDENTIFIER` — `io.freegle.app.NotificationServiceExtension`
+- `PRODUCT_BUNDLE_IDENTIFIER` — `org.ilovefreegle.iphone.NotificationServiceExtension`
 - `SWIFT_VERSION` — `5.0` (or the same as the main app)
 - `IPHONEOS_DEPLOYMENT_TARGET` — `14.0` (matches the rest of the project)
 
@@ -103,7 +103,7 @@ Libraries, and Embedded Content** → **+** → choose the
 ### 6 — Provisioning profile
 
 Create a new **App ID** in the Apple Developer portal for the NSE bundle
-identifier (`io.freegle.app.NotificationServiceExtension`), then create a
+identifier (`org.ilovefreegle.iphone.NotificationServiceExtension`), then create a
 provisioning profile for it under the `GMYU3K9D84` team.  Download and add it
 to Xcode under **Preferences → Accounts → Download Manual Profiles** or let
 automatic signing handle it.
