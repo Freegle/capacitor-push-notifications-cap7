@@ -1,4 +1,4 @@
-/* FREEGLE 7.0.2 */
+/* FREEGLE 7.0.3 */
 
 package com.capacitorjs.plugins.pushnotifications;
 
@@ -13,14 +13,20 @@ import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Rect;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import org.json.JSONArray;
 
 /**
  * Centralized notification creation for Freegle.
@@ -163,8 +169,17 @@ public class NotificationHelper {
                 }
             }
 
-            // Set large icon (profile image)
+            // Set large icon (profile image / first photo) - shown in the
+            // collapsed notification.
             setLargeIcon(builder, resources, appIconResId, imageUrl);
+
+            // Rich expanded style. The server sends images[] (up to 4 photo
+            // URLs) and lines[] (per-post text rows) for digest-style pushes;
+            // the previous code only set a small large-icon, so a multi-photo
+            // digest showed a single thumbnail. Build a collage / big picture /
+            // inbox text list as appropriate. No-op on any error, leaving the
+            // plain large-icon notification intact.
+            applyRichStyle(builder, title, imageUrl, msgdata);
 
             // Add action buttons based on category
             PushNotificationsPlugin.addNotificationActions(context, builder, category, msgdata, notId);
@@ -209,6 +224,179 @@ public class NotificationHelper {
                 Log.w(TAG, "Failed to load app icon", e);
             }
         }
+    }
+
+    /**
+     * Apply a rich expanded notification style based on the payload:
+     *   images[] with >=2 URLs    -> a tiled collage via BigPictureStyle
+     *   a single photo URL        -> BigPictureStyle of that photo
+     *   lines[] (no usable photo) -> InboxStyle text list
+     * Leaves the plain large-icon notification untouched on any error or when
+     * the payload carries none of these fields, so unknown/legacy payloads
+     * still display.
+     */
+    private static void applyRichStyle(Notification.Builder builder, String title,
+                                       String primaryImageUrl, Map<String, String> msgdata) {
+        try {
+            List<String> imageUrls = parseJsonStringArray(msgdata.get("images"));
+            List<String> lines = parseJsonStringArray(msgdata.get("lines"));
+            String summary = msgdata.get("summary");
+            int moreCount = 0;
+            try {
+                moreCount = Integer.parseInt(msgdata.get("moreCount"));
+            } catch (Exception ignored) {
+            }
+
+            // 1. Collage from >=2 photos.
+            if (imageUrls.size() >= 2) {
+                Bitmap collage = buildCollage(imageUrls);
+                if (collage != null) {
+                    Notification.BigPictureStyle bp = new Notification.BigPictureStyle()
+                        .bigPicture(collage)
+                        .setBigContentTitle(title);
+                    if (summary != null && !summary.isEmpty()) {
+                        bp.setSummaryText(summary);
+                    }
+                    builder.setStyle(bp);
+                    return;
+                }
+            }
+
+            // 2. Single photo -> BigPicture.
+            String single = primaryImageUrl;
+            if ((single == null || single.isEmpty()) && !imageUrls.isEmpty()) {
+                single = imageUrls.get(0);
+            }
+            if (single != null && single.startsWith("http")) {
+                Bitmap big = downloadImage(single);
+                if (big != null) {
+                    Notification.BigPictureStyle bp = new Notification.BigPictureStyle()
+                        .bigPicture(big)
+                        .setBigContentTitle(title);
+                    if (summary != null && !summary.isEmpty()) {
+                        bp.setSummaryText(summary);
+                    }
+                    builder.setStyle(bp);
+                    return;
+                }
+            }
+
+            // 3. No photo -> InboxStyle text list.
+            if (!lines.isEmpty()) {
+                Notification.InboxStyle inbox = new Notification.InboxStyle()
+                    .setBigContentTitle(title);
+                for (String line : lines) {
+                    inbox.addLine(line);
+                }
+                if (moreCount > 0) {
+                    inbox.setSummaryText("+" + moreCount + " more");
+                } else if (summary != null && !summary.isEmpty()) {
+                    inbox.setSummaryText(summary);
+                }
+                builder.setStyle(inbox);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "applyRichStyle failed, leaving plain notification: " + e.getMessage());
+        }
+    }
+
+    /** Parse a JSON array string of strings into a List; empty on null/blank/error. */
+    private static List<String> parseJsonStringArray(String json) {
+        List<String> out = new ArrayList<>();
+        if (json == null || json.isEmpty()) {
+            return out;
+        }
+        try {
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                String s = arr.optString(i, null);
+                if (s != null && !s.isEmpty()) {
+                    out.add(s);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to parse JSON array: " + e.getMessage());
+        }
+        return out;
+    }
+
+    /**
+     * Build a single landscape collage from up to 4 photo URLs, laid out to
+     * fill a 1024x512 BigPicture canvas:
+     *   2 photos -> side by side
+     *   3 photos -> one tall left, two stacked right
+     *   4 photos -> 2x2 grid
+     * Returns null if fewer than 2 photos download successfully (caller then
+     * falls back to a single big picture).
+     */
+    private static Bitmap buildCollage(List<String> urls) {
+        List<Bitmap> bitmaps = new ArrayList<>();
+        for (String u : urls) {
+            if (bitmaps.size() >= 4) {
+                break;
+            }
+            if (u == null || !u.startsWith("http")) {
+                continue;
+            }
+            Bitmap b = downloadImage(u);
+            if (b != null) {
+                bitmaps.add(b);
+            }
+        }
+        if (bitmaps.size() < 2) {
+            return null;
+        }
+
+        final int w = 1024;
+        final int h = 512;
+        final int gap = 6;
+        Bitmap canvasBmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(canvasBmp);
+        canvas.drawColor(Color.WHITE);
+
+        int cw = (w - gap) / 2;
+        int rh = (h - gap) / 2;
+        int n = bitmaps.size();
+        if (n == 2) {
+            drawCenterCrop(canvas, bitmaps.get(0), new Rect(0, 0, cw, h));
+            drawCenterCrop(canvas, bitmaps.get(1), new Rect(cw + gap, 0, w, h));
+        } else if (n == 3) {
+            drawCenterCrop(canvas, bitmaps.get(0), new Rect(0, 0, cw, h));
+            drawCenterCrop(canvas, bitmaps.get(1), new Rect(cw + gap, 0, w, rh));
+            drawCenterCrop(canvas, bitmaps.get(2), new Rect(cw + gap, rh + gap, w, h));
+        } else {
+            drawCenterCrop(canvas, bitmaps.get(0), new Rect(0, 0, cw, rh));
+            drawCenterCrop(canvas, bitmaps.get(1), new Rect(cw + gap, 0, w, rh));
+            drawCenterCrop(canvas, bitmaps.get(2), new Rect(0, rh + gap, cw, h));
+            drawCenterCrop(canvas, bitmaps.get(3), new Rect(cw + gap, rh + gap, w, h));
+        }
+        return canvasBmp;
+    }
+
+    /** Draw src into dest scaled to fill with a center-crop (no distortion). */
+    private static void drawCenterCrop(Canvas canvas, Bitmap src, Rect dest) {
+        if (src == null) {
+            return;
+        }
+        int sw = src.getWidth();
+        int sh = src.getHeight();
+        int dw = dest.width();
+        int dh = dest.height();
+        if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) {
+            return;
+        }
+        float scale = Math.max((float) dw / sw, (float) dh / sh);
+        int scaledW = Math.round(sw * scale);
+        int scaledH = Math.round(sh * scale);
+        int left = dest.left + (dw - scaledW) / 2;
+        int top = dest.top + (dh - scaledH) / 2;
+        Rect srcRect = new Rect(0, 0, sw, sh);
+        Rect dstRect = new Rect(left, top, left + scaledW, top + scaledH);
+        Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
+        canvas.save();
+        canvas.clipRect(dest);
+        canvas.drawBitmap(src, srcRect, dstRect, paint);
+        canvas.restore();
     }
 
     /**
