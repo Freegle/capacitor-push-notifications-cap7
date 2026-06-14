@@ -85,10 +85,11 @@ public class NotificationService: UNNotificationServiceExtension {
         }
 
         // --- Subtitle ---
-        // "summary" = "Freegle • 7 new posts" — gives the user context under the title.
-        if let summary = userInfo["summary"] as? String, !summary.isEmpty {
-            content.subtitle = summary
-        }
+        // Intentionally NOT set. "summary" ("Freegle • N new posts") duplicates the
+        // count already in the title ("N new freegles near you"), and iOS shows the
+        // app name "Freegle" in the notification header anyway, so a subtitle here is
+        // pure redundancy stacked directly under the title. The item lines go in the
+        // body. (summary is still used by the Android InboxStyle/collage caption.)
 
         // --- Body ---
         // Prefer the multiline "lines" array joined by newlines; fall back to "message".
