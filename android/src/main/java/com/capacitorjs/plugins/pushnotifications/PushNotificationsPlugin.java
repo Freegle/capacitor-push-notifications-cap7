@@ -63,6 +63,7 @@ public class PushNotificationsPlugin extends Plugin {
 
     // Freegle: Category constants for notification actions
     public static final String CATEGORY_CHAT_MESSAGE = "CHAT_MESSAGE";
+    public static final String CATEGORY_NEW_POSTS    = "NEW_POSTS";  // Daily digest — passive, no action buttons
 
     public void load() {
         notificationManager = (NotificationManager) getActivity().getSystemService(Context.NOTIFICATION_SERVICE);
@@ -411,11 +412,13 @@ public class PushNotificationsPlugin extends Plugin {
     /**
      * Add action buttons to a notification based on the category.
      * For CHAT_MESSAGE category, adds Reply (with text input) and Mark Read buttons.
+     * NEW_POSTS and all other categories are passive — no action buttons are added.
+     * Unknown/future categories also receive no action buttons (safe by default).
      */
     public static void addNotificationActions(Context context, Notification.Builder builder,
             String category, Map<String, String> msgdata, int notificationId) {
         if (category == null || !CATEGORY_CHAT_MESSAGE.equals(category)) {
-            return; // Only add actions for chat messages
+            return; // Only CHAT_MESSAGE gets action buttons; NEW_POSTS and others are passive
         }
 
         try {
